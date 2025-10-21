@@ -1,7 +1,9 @@
 import type { NextRequest } from "next/server";
+import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { updateArchiveMeta, type ArchiveUpdateResult } from "~/entities/archives";
+import { ArchiveMetaSchema } from "~/entities/archives/models";
 
 import { NxResponse } from "~/shared/lib/next/nx-response";
 
@@ -11,18 +13,8 @@ type ContextParams = {
   };
 };
 
-// Define a strict schema for allowed archive update fields
-const ArchiveUpdateSchema = z.object({
-  title: z.string()
-    .min(4, "Title must be at least 4 characters long.")
-    .max(24, "Title must be at most 24 characters long.")
-    .trim()
-    .optional(),
-  description: z.string()
-    .min(8, "Description must be at least 8 characters long.")
-    .max(64, "Description must be at most 64 characters long.")
-    .trim()
-    .optional(),
+// Re-use existing ArchiveMetaSchema and extend it with isPublic for updates
+const ArchiveUpdateSchema = ArchiveMetaSchema.partial().extend({
   isPublic: z.boolean().optional(),
 }).strict(); // .strict() ensures no unknown keys are allowed
 
@@ -103,6 +95,9 @@ export async function PATCH(request: NextRequest, ctx: ContextParams) {
       statusCode
     );
   }
+
+  // Revalidate the archive page to reflect the updated data
+  revalidatePath(`/a/${archiveId}`);
 
   return NxResponse.success(result.message, {}, result.statusCode ?? 200);
 }

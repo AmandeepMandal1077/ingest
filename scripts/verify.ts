@@ -1,32 +1,55 @@
 #!/usr/bin/env tsx
 
 /**
- * Verification Script: Check isPublic field migration
- * 
- * Verifies that all documents have the isPublic field.
- * 
+ * Verification Script: Check isPublic field on catalogs and archives documents
+ *
+ * Verifies that all catalogs and archives documents have the isPublic field.
+ *
  * Usage:
- *   npm run verify:is-public
+ *   npm run verify:local    # Check local emulator
+ *   npm run verify          # Check production
  */
+
+// Check if this is local run
+const IS_LOCAL = process.argv.includes('--local');
+
+if (IS_LOCAL) {
+  process.env.FIRESTORE_EMULATOR_HOST = "localhost:8080";
+  process.env.FIREBASE_AUTH_EMULATOR_HOST = "localhost:9099";
+}
 
 import type { CollectionReference, QueryDocumentSnapshot } from 'firebase-admin/firestore';
 
-import { refs } from '~/shared/lib/firebase/refs';
+import { initializeApp } from 'firebase-admin/app';
+import { getFirestore } from 'firebase-admin/firestore';
+
+const app = initializeApp({
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'ingest-dev',
+});
+
+const admin = {
+  db: getFirestore(app),
+};
+
+const refs = {
+  catalogs: admin.db.collection('catalogs'),
+  archives: admin.db.collection('archives'),
+};
 
 const BATCH_SIZE = 100;
 
 /**
- * Verify a collection
+ * Verify documents in a collection
  */
-async function verifyCollection(
-  collectionRef: CollectionReference, 
+async function verifyCollectionDocuments(
+  collectionRef: CollectionReference,
   name: string
-): Promise<{ total: number; withField: number; samples: Array<{ id: string; hasField: boolean; value: boolean | undefined }> }> {
-  console.log(`🔍 Checking ${name}...`);
-  
-  let total = 0;
+): Promise<{ totalDocuments: number; withField: number; samples: Array<{ docId: string; hasField: boolean; value: boolean | undefined }> }> {
+  console.log(`🔍 Checking ${name} documents...`);
+
+  let totalDocuments = 0;
   let withField = 0;
-  const samples: Array<{ id: string; hasField: boolean; value: boolean | undefined }> = [];
+  const samples: Array<{ docId: string; hasField: boolean; value: boolean | undefined }> = [];
   let lastDoc: QueryDocumentSnapshot | null = null;
   let hasMore = true;
 
@@ -40,18 +63,17 @@ async function verifyCollection(
     if (snapshot.empty) break;
 
     for (const doc of snapshot.docs) {
-      total++;
       const data = doc.data();
-      
-      if (data.isPublic !== undefined && data.isPublic !== null) {
-        withField++;
-      }
+      totalDocuments++;
+
+      const hasField = data.isPublic !== undefined && data.isPublic !== null;
+      if (hasField) withField++;
 
       // Collect first 3 samples
       if (samples.length < 3) {
         samples.push({
-          id: doc.id,
-          hasField: data.isPublic !== undefined && data.isPublic !== null,
+          docId: doc.id,
+          hasField,
           value: data.isPublic
         });
       }
@@ -61,7 +83,7 @@ async function verifyCollection(
     hasMore = snapshot.docs.length === BATCH_SIZE;
   }
 
-  return { total, withField, samples };
+  return { totalDocuments, withField, samples };
 }
 
 /**
@@ -72,31 +94,31 @@ async function verify(): Promise<void> {
   console.log('---');
 
   try {
-    const catalogResults = await verifyCollection(refs.catalogs, 'catalogs');
-    const archiveResults = await verifyCollection(refs.archives, 'archives');
-    
-    const totalDocs = catalogResults.total + archiveResults.total;
+    const catalogResults = await verifyCollectionDocuments(refs.catalogs, 'catalogs');
+    const archiveResults = await verifyCollectionDocuments(refs.archives, 'archives');
+
+    const totalDocuments = catalogResults.totalDocuments + archiveResults.totalDocuments;
     const totalWithField = catalogResults.withField + archiveResults.withField;
-    const missing = totalDocs - totalWithField;
+    const missing = totalDocuments - totalWithField;
 
     console.log('\n' + '='.repeat(40));
     console.log('📊 VERIFICATION RESULTS');
     console.log('='.repeat(40));
-    console.log(`📚 Catalogs: ${catalogResults.withField}/${catalogResults.total} have isPublic`);
-    console.log(`📁 Archives: ${archiveResults.withField}/${archiveResults.total} have isPublic`);
-    console.log(`🌟 Total: ${totalWithField}/${totalDocs} have isPublic`);
+    console.log(`📚 Catalog documents: ${catalogResults.withField}/${catalogResults.totalDocuments} have isPublic`);
+    console.log(`📁 Archive documents: ${archiveResults.withField}/${archiveResults.totalDocuments} have isPublic`);
+    console.log(`📄 Total documents: ${totalWithField}/${totalDocuments} have isPublic`);
 
     if (missing === 0) {
       console.log('\n✅ SUCCESS: All documents have isPublic field!');
     } else {
       console.log(`\n❌ MISSING: ${missing} documents need the isPublic field`);
-      console.log('   Run: npm run migrate:is-public');
+      console.log('   Run: npm run migrate');
     }
 
     // Show samples
     console.log('\n📋 Sample documents:');
     [...catalogResults.samples, ...archiveResults.samples].forEach((sample, i) => {
-      console.log(`  ${i + 1}. ${sample.id}: isPublic=${sample.value}`);
+      console.log(`  ${i + 1}. ${sample.docId}: isPublic=${sample.value}`);
     });
 
   } catch (_error) {

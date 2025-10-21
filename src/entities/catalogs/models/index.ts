@@ -159,6 +159,7 @@ const CatalogByUserSchema = CatalogMetaSchema.extend({
 });
 
 const ContentByCatalogSchema = CatalogMetaSchema.extend({
+  isPublic: z.boolean().optional().default(true),
   nextUpdate: z.string(),
   pageviews: z.number(),
   posts: z.array(CatalogSubredditPostSchema),

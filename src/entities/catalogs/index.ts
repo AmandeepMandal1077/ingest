@@ -18,4 +18,4 @@ export {
   type CatalogUpdateOptions 
 } from "./services/update-catalog-meta";
 export { updateCatalogPlaylists } from "./services/update-catalog-playlists";
-export { updateCatalogPublicStatus } from "./services/update-catalog-public-status";
+

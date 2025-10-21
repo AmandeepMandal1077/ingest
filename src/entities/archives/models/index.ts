@@ -7,12 +7,13 @@ const TimestampSchema = z.custom<Timestamp>(
   (value) => value instanceof Timestamp
 );
 
-const ArchiveMetaSchema = z.object({
+export const ArchiveMetaSchema = z.object({
   description: z.string(),
   title: z.string(),
 });
 
 const ArchiveByIDSchema = ArchiveMetaSchema.extend({
+  isPublic: z.boolean().optional().default(true),
   updatedAt: z.string(),
   videos: z.array(YouTubeVideoMetadataSchema),
 });

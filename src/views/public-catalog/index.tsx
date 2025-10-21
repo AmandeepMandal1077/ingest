@@ -29,6 +29,7 @@ import FilterChannel, { CurrentActive } from "./filter-channel";
 import { filterVideos, getActiveChannelIds } from "./helper-methods";
 import NextUpdateToast from "./next-update-toast";
 import SubredditPosts from "./subreddit-posts";
+import { TogglePublicPrivate } from "./toggle-public-private";
 
 // Refer: https://nextjs.org/docs/pages/building-your-application/optimizing/lazy-loading#with-no-ssr
 const DynamicShareCatalog = dynamic(() => import("./share-catalog"), {
@@ -126,6 +127,12 @@ export default async function PubliCatalog({
                         catalogId={catalogId}
                         catalogTitle={catalogTitle}
                         catalogDescription={catalogDescription}
+                      />
+                    </DropdownMenuItem>
+                    <DropdownMenuItem className="p-2 rounded-lg">
+                      <TogglePublicPrivate
+                        catalogId={catalogId}
+                        initialIsPublic={catalogData?.isPublic ?? true}
                       />
                     </DropdownMenuItem>
                   </DropdownMenuContent>

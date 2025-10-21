@@ -1,12 +1,25 @@
 import { getValidCatalogIds } from "~/entities/catalogs";
 
 import { NxResponse } from "~/shared/lib/next/nx-response";
+import Log from "~/shared/utils/terminal-logger";
 
-export async function GET() {
-  const pageListData = await getValidCatalogIds();
-  return NxResponse.success(
-    "Valid catalog ids fetched successfully.",
-    pageListData,
-    200
-  );
+export async function GET(request: Request) {
+  try {
+    const url = new URL(request.url);
+    const isPublic = url.searchParams.get("isPublic") === "true";
+
+    const pageListData = await getValidCatalogIds(isPublic);
+    return NxResponse.success(
+      "Valid catalog ids fetched successfully.",
+      pageListData,
+      200
+    );
+  } catch (err) {
+    Log.fail(err);
+    return NxResponse.fail(
+      "Unable to parse valid catalog ids.",
+      { code: "CATALOG_VALID", details: "Unable to parse valid catalog ids." },
+      400
+    );
+  }
 }

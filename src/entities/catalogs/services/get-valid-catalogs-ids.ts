@@ -4,14 +4,13 @@ import { refs } from "~/shared/lib/firebase/refs";
 
 import type { ZCatalogDocument, ZCatalogValid } from "../models";
 
-export async function getValidCatalogIds() {
+export async function getValidCatalogIds(isPublic?: boolean) {
   unstable_noStore();
   const catalogListData: ZCatalogValid[] = [];
 
-  // Filter the catalog, where totalVideos is greater than 0, isPublic is true, and pageviews are sorted 'desc'
+  // Filter the catalog, where totalVideos is greater than 0, and pageviews are sorted 'desc'
   const validCatalogQuery = refs.catalogs
     .where("data.totalVideos", ">", 0)
-    .where("isPublic", "==", true)
     .orderBy("pageviews", "desc")
     .limit(50);
 
@@ -28,19 +27,24 @@ export async function getValidCatalogIds() {
     catalogIds.map(async (catalogId) => {
       const catalogData = await getCatalogMetadata(catalogId);
       if (catalogData) {
-        const metaData = {
-          description: catalogData?.description,
-          id: catalogId,
-          isPublic: catalogData?.isPublic ?? true,
-          pageviews: catalogData.pageviews ?? 0,
-          thumbnails: getVideoThumbnails(catalogData),
-          title: catalogData?.title,
-          totalPosts: catalogData?.data.totalPosts,
-          totalVideos: catalogData?.data?.totalVideos,
-          updatedAt: catalogData?.data.updatedAt,
-        };
+        // Check if catalog has videos matching the filter
+        const hasMatchingVideos = isPublic === undefined ? true : checkCatalogHasPublicVideos(catalogData, isPublic);
 
-        catalogListData.push(metaData);
+        if (hasMatchingVideos) {
+          const metaData = {
+            description: catalogData?.description,
+            id: catalogId,
+            isPublic: catalogData?.isPublic ?? true,
+            pageviews: catalogData.pageviews ?? 0,
+            thumbnails: getVideoThumbnails(catalogData),
+            title: catalogData?.title,
+            totalPosts: catalogData?.data.totalPosts,
+            totalVideos: catalogData?.data?.totalVideos,
+            updatedAt: catalogData?.data.updatedAt,
+          };
+
+          catalogListData.push(metaData);
+        }
       }
     })
   );
@@ -53,6 +57,11 @@ const getCatalogMetadata = async (catalogId: string) => {
   const catalogSnap = await catalogRef.get();
   const catalogData = catalogSnap.data();
   return catalogData;
+};
+
+const checkCatalogHasPublicVideos = (catalogData: ZCatalogDocument, isPublic: boolean) => {
+  // Since isPublic is now at document level, just check if the catalog's isPublic matches
+  return catalogData.isPublic === isPublic;
 };
 
 const getVideoThumbnails = (catalogData: ZCatalogDocument) => {

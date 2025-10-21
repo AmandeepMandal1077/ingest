@@ -3,9 +3,12 @@ import { getValidArchiveIds } from "~/entities/archives";
 import { NxResponse } from "~/shared/lib/next/nx-response";
 import Log from "~/shared/utils/terminal-logger";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const pageListData = await getValidArchiveIds();
+    const url = new URL(request.url);
+    const isPublic = url.searchParams.get("isPublic") === "true";
+
+    const pageListData = await getValidArchiveIds(isPublic);
     return NxResponse.success(
       "Valid archive ids fetched successfully.",
       pageListData,

@@ -1,7 +1,9 @@
 import type { NextRequest } from "next/server";
+import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { updateCatalogMeta, type CatalogUpdateResult } from "~/entities/catalogs";
+import { CatalogMetaSchema } from "~/entities/catalogs/models";
 import { NxResponse } from "~/shared/lib/next/nx-response";
 
 type ContextParams = {
@@ -10,20 +12,10 @@ type ContextParams = {
   };
 };
 
-// Define a strict schema for allowed catalog update fields
-const CatalogUpdateSchema = z.strictObject({
-  title: z.string()
-    .min(4, "Title must be at least 4 characters long.")
-    .max(24, "Title must be at most 24 characters long.")
-    .trim()
-    .optional(),
-  description: z.string()
-    .min(8, "Description must be at least 8 characters long.")
-    .max(64, "Description must be at most 64 characters long.")
-    .trim()
-    .optional(),
+// Re-use existing CatalogMetaSchema and extend it with isPublic for updates
+const CatalogUpdateSchema = CatalogMetaSchema.partial().extend({
   isPublic: z.boolean().optional(),
-}); // z.strictObject ensures no unknown keys are allowed
+}).strict(); // .strict() ensures no unknown keys are allowed
 
 export async function PATCH(request: NextRequest, ctx: ContextParams) {
   const { catalogId } = ctx.params;
@@ -107,6 +99,9 @@ export async function PATCH(request: NextRequest, ctx: ContextParams) {
       statusCode
     );
   }
+
+  // Revalidate the catalog page to reflect the updated data
+  revalidatePath(`/c/${catalogId}`);
 
   return NxResponse.success(result.message, {}, result.statusCode ?? 200);
 }

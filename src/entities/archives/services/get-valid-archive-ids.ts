@@ -14,19 +14,23 @@ const getArchiveMetadata = async (archiveId: string) => {
   return archiveData;
 };
 
+const checkArchiveHasPublicVideos = (archiveData: DocumentData, isPublic: boolean) => {
+  // Since isPublic is now at document level, just check if the archive's isPublic matches
+  return archiveData.isPublic === isPublic;
+};
+
 const getVideoThumbnails = (archiveData: DocumentData) => {
   const videos: ZYouTubeVideoMetadata[] = archiveData.videos;
   const thumbnails = videos.map((video) => video.videoThumbnail);
   return thumbnails;
 };
 
-export async function getValidArchiveIds() {
+export async function getValidArchiveIds(isPublic?: boolean) {
   unstable_noStore();
   const archiveListData: ZArchiveValid[] = [];
 
   const validArchiveQuery = refs.archives
     .where("data.videos", "!=", false)
-    .where("isPublic", "==", true)
     .limit(25);
   const validArchiveQuerySnapshot = await validArchiveQuery.get();
 
@@ -44,17 +48,22 @@ export async function getValidArchiveIds() {
     archiveIds.map(async (archiveId) => {
       const archiveData = await getArchiveMetadata(archiveId);
       if (archiveData) {
-        const metaData: ZArchiveValid = {
-          description: archiveData?.description,
-          id: archiveId,
-          isPublic: archiveData?.isPublic ?? true,
-          thumbnails: getVideoThumbnails(archiveData.data),
-          title: archiveData?.title,
-          totalVideos: archiveData?.data.totalVideos,
-          updatedAt: archiveData?.data.updatedAt,
-        };
+        // Check if archive has videos matching the filter
+        const hasMatchingVideos = isPublic === undefined ? true : checkArchiveHasPublicVideos(archiveData, isPublic);
 
-        archiveListData.push(metaData);
+        if (hasMatchingVideos) {
+          const metaData: ZArchiveValid = {
+            description: archiveData?.description,
+            id: archiveId,
+            isPublic: archiveData?.isPublic ?? true,
+            thumbnails: getVideoThumbnails(archiveData.data),
+            title: archiveData?.title,
+            totalVideos: archiveData?.data.totalVideos,
+            updatedAt: archiveData?.data.updatedAt,
+          };
+
+          archiveListData.push(metaData);
+        }
       }
     })
   );
