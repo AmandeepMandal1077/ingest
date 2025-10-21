@@ -23,7 +23,9 @@ const IS_LOCAL = process.argv.includes('--local') || process.env.NODE_ENV === 'd
 const BATCH_SIZE = 100;
 
 // Initialize Firebase Admin
-let appOptions: any;
+import type { AppOptions } from 'firebase-admin/app';
+
+let appOptions: AppOptions;
 
 if (IS_LOCAL) {
   process.env.FIRESTORE_EMULATOR_HOST = "localhost:8080";
