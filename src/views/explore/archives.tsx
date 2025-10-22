@@ -24,14 +24,29 @@ export default function Archives() {
   };
 
   useEffect(() => {
+    const controller = new AbortController();
+
     const fetchArchives = async () => {
-      const response = await fetchApi<ZArchiveValid[]>(`/archives/valid?isPublic=${isPublic}`);
-      if (response.data) {
-        setArchives(response.data);
+      try {
+        const response = await fetchApi<ZArchiveValid[]>(`/archives/valid?isPublic=${isPublic}`, {
+          signal: controller.signal,
+        });
+        if (response.data) {
+          setArchives(response.data);
+        }
+      } catch (error) {
+        if (error instanceof Error && error.name !== 'AbortError') {
+          // Handle other errors if needed
+          console.error('Fetch error:', error);
+        }
       }
     };
 
     fetchArchives();
+
+    return () => {
+      controller.abort();
+    };
   }, [isPublic]);
 
   return (

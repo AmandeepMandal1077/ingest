@@ -51,32 +51,93 @@ export function TogglePublicPrivate({
           body: JSON.stringify({ isPublic: newIsPublic }),
         });
 
-        const data = await response.json();
+        if (response.ok) {
+          // Handle successful response
+          let data: any;
+          try {
+            data = await response.json();
+          } catch {
+            // If JSON parsing fails on success, assume success
+            data = { success: true };
+          }
 
-        if (data.success) {
-          setIsPublic(newIsPublic);
-          setRateLimitRemaining(null);
-          toast.success(
-            `Catalog is now ${newIsPublic ? "public" : "private"}`
-          );
-          // Refresh the page to update the data from server
-          router.refresh();
-        } else {
-          // Check if it's a rate limit error
-          if (data.error?.code === "RATE_LIMIT_EXCEEDED") {
-            // Extract remaining time from message if available
-            const message = data.message || "";
-            const match = message.match(/(\d+)\s+seconds/);
-            if (match) {
-              const seconds = Number.parseInt(match[1], 10);
-              setRateLimitRemaining(seconds);
-              toast.error(`Rate limit exceeded. Try again in ${seconds} seconds.`);
-            } else {
-              toast.error(message || "Rate limit exceeded. Please try again later.");
-            }
+          if (data.success) {
+            setIsPublic(newIsPublic);
+            setRateLimitRemaining(null);
+            toast.success(
+              `Catalog is now ${newIsPublic ? "public" : "private"}`
+            );
+            // Refresh the page to update the data from server
+            router.refresh();
           } else {
             toast.error(data.message || "Failed to update catalog visibility");
           }
+        } else {
+          // Handle non-OK response
+          let retryAfterSeconds: number | null = null;
+          let errorMessage = "Failed to update catalog visibility";
+
+          // Try to parse Retry-After header
+          const retryAfterHeader = response.headers.get("Retry-After");
+          if (retryAfterHeader) {
+            // Check if it's a number (delay-seconds)
+            const numericRetryAfter = Number(retryAfterHeader);
+            if (!Number.isNaN(numericRetryAfter) && numericRetryAfter > 0) {
+              retryAfterSeconds = Math.ceil(numericRetryAfter);
+            } else {
+              // Try to parse as HTTP-date
+              try {
+                const retryAfterDate = Date.parse(retryAfterHeader);
+                if (!Number.isNaN(retryAfterDate)) {
+                  const secondsRemaining = (retryAfterDate - Date.now()) / 1000;
+                  if (secondsRemaining > 0) {
+                    retryAfterSeconds = Math.ceil(secondsRemaining);
+                  }
+                }
+              } catch {
+                // Ignore parsing errors
+              }
+            }
+          }
+
+          // Try to read JSON safely
+          let data: any = null;
+          try {
+            data = await response.json();
+          } catch {
+            // JSON parsing failed, data remains null
+          }
+
+          // Determine retry time and error message
+          if (data?.error?.code === "RATE_LIMIT_EXCEEDED" || response.status === 429) {
+            // Use Retry-After header if available
+            if (retryAfterSeconds !== null) {
+              setRateLimitRemaining(retryAfterSeconds);
+              errorMessage = `Rate limit exceeded. Try again in ${retryAfterSeconds} seconds.`;
+            } else if (data?.message) {
+              // Fall back to extracting from message
+              const match = data.message.match(/(\d+)\s+seconds/);
+              if (match) {
+                const seconds = Number.parseInt(match[1], 10);
+                setRateLimitRemaining(seconds);
+                errorMessage = `Rate limit exceeded. Try again in ${seconds} seconds.`;
+              } else {
+                errorMessage = data.message;
+              }
+            } else {
+              errorMessage = "Rate limit exceeded. Please try again later.";
+            }
+          } else if (data?.message) {
+            errorMessage = data.message;
+          } else if (response.status === 404) {
+            errorMessage = "Catalog not found";
+          } else if (response.status === 403) {
+            errorMessage = "You don't have permission to update this catalog";
+          } else if (response.status >= 500) {
+            errorMessage = "Server error. Please try again later.";
+          }
+
+          toast.error(errorMessage);
         }
       } catch (error) {
         console.error("Error toggling catalog visibility:", error);

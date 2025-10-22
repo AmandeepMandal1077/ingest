@@ -2,7 +2,7 @@ import type { NextRequest } from "next/server";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
-import { updateArchiveMeta, type ArchiveUpdateResult } from "~/entities/archives";
+import { updateArchiveMeta, type ArchiveUpdateResult, checkArchiveOwnership } from "~/entities/archives";
 import { ArchiveMetaSchema } from "~/entities/archives/models";
 
 import { NxResponse } from "~/shared/lib/next/nx-response";
@@ -21,12 +21,32 @@ const ArchiveUpdateSchema = ArchiveMetaSchema.partial().extend({
 export async function PATCH(request: NextRequest, ctx: ContextParams) {
   const { archiveId } = ctx.params;
 
+  // Extract and validate userId from headers
+  const userId = request.headers.get("userId");
+  if (!userId) {
+    return NxResponse.fail(
+      "Authentication required. User ID not found.",
+      { code: "UNAUTHORIZED", details: "Missing userId header." },
+      401
+    );
+  }
+
   // Validate archive ID parameter
   if (!archiveId || archiveId.trim() === '') {
     return NxResponse.fail(
       "Missing or invalid archive ID in request path.",
       { code: "INVALID_PARAM", details: "archiveId parameter is required." },
       400
+    );
+  }
+
+  // Check archive ownership before proceeding
+  const isOwner = await checkArchiveOwnership(userId, archiveId);
+  if (!isOwner) {
+    return NxResponse.fail(
+      "You do not have permission to update this archive.",
+      { code: "FORBIDDEN", details: "User does not own this archive." },
+      403
     );
   }
 
@@ -87,7 +107,8 @@ export async function PATCH(request: NextRequest, ctx: ContextParams) {
   if (!result.success) {
     const statusCode = result.statusCode || 500;
     const errorCode = statusCode === 429 ? "RATE_LIMIT_EXCEEDED" : 
-                     statusCode === 404 ? "NOT_FOUND" : "UPDATE_FAILED";
+                     statusCode === 404 ? "NOT_FOUND" : 
+                     statusCode === 400? "INVALID_PAYLOAD" : "UPDATE_FAILED";
     
     return NxResponse.fail(
       result.message,

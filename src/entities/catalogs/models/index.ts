@@ -130,8 +130,8 @@ const CatalogSubredditPostSchema = z.object({
 const CatalogDocumentSchema = CatalogMetaSchema.extend({
   data: z.object({
     posts: z.array(CatalogSubredditPostSchema).optional(),
-    totalPosts: z.number().prefault(0),
-    totalVideos: z.number().prefault(0),
+    totalPosts: z.number().default(0),
+    totalVideos: z.number().default(0),
     updatedAt: TimestampSchema,
     videos: CatalogVideoListSchema,
   }),
@@ -145,7 +145,7 @@ const CatalogValidSchema = z.object({
   description: z.string(),
   id: z.string(),
   isPublic: z.boolean().optional().default(true),
-  pageviews: z.number().prefault(0),
+  pageviews: z.number().default(0),
   thumbnails: z.array(z.string()),
   title: z.string(),
   totalPosts: z.number(),
@@ -163,8 +163,8 @@ const ContentByCatalogSchema = CatalogMetaSchema.extend({
   nextUpdate: z.string(),
   pageviews: z.number(),
   posts: z.array(CatalogSubredditPostSchema),
-  totalPosts: z.number().prefault(0),
-  totalVideos: z.number().prefault(0),
+  totalPosts: z.number().default(0),
+  totalVideos: z.number().default(0),
   videos: CatalogVideoListSchema,
 });
 

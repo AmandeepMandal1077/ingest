@@ -24,17 +24,32 @@ export default function Catalogs() {
   };
 
   useEffect(() => {
+    const controller = new AbortController();
+
     const fetchCatalogs = async () => {
-      const response = await fetchApi<ZCatalogValid[]>(`/catalogs/valid?isPublic=${isPublic}`);
-      if (response.data) {
-        const sortedByPageviews = response.data.sort(
-          (a, b) => (b.pageviews || 0) - (a.pageviews || 0)
-        );
-        setCatalogs(sortedByPageviews);
+      try {
+        const response = await fetchApi<ZCatalogValid[]>(`/catalogs/valid?isPublic=${isPublic}`, {
+          signal: controller.signal,
+        });
+        if (response.data) {
+          const sortedByPageviews = [...response.data].sort(
+            (a, b) => (b.pageviews || 0) - (a.pageviews || 0)
+          );
+          setCatalogs(sortedByPageviews);
+        }
+      } catch (error) {
+        if (error instanceof Error && error.name !== 'AbortError') {
+          // Handle other errors if needed
+          console.error('Fetch error:', error);
+        }
       }
     };
 
     fetchCatalogs();
+
+    return () => {
+      controller.abort();
+    };
   }, [isPublic]);
 
   return (

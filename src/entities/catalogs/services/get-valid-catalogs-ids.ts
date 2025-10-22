@@ -19,49 +19,37 @@ export async function getValidCatalogIds(isPublic?: boolean) {
     return catalogListData;
   }
 
-  const catalogIds = querySnapshot.docs.map((catalog) => catalog.id);
+  // Use snapshot data directly instead of fetching each catalog again
+  for (const doc of querySnapshot.docs) {
+    const catalogData = doc.data() as ZCatalogDocument;
+    
+    // Check if catalog has videos matching the filter
+    const hasMatchingVideos = isPublic === undefined ? true : matchesVisibility(catalogData, isPublic);
 
-  // Get the title and description of the page
-  // Awaiting using a Promise.all is done to wait for the map to execute before returning the response
-  await Promise.all(
-    catalogIds.map(async (catalogId) => {
-      const catalogData = await getCatalogMetadata(catalogId);
-      if (catalogData) {
-        // Check if catalog has videos matching the filter
-        const hasMatchingVideos = isPublic === undefined ? true : checkCatalogHasPublicVideos(catalogData, isPublic);
+    if (hasMatchingVideos) {
+      const metaData: ZCatalogValid = {
+        description: catalogData.description,
+        id: doc.id,
+        isPublic: catalogData.isPublic ?? true,
+        pageviews: catalogData.pageviews ?? 0,
+        thumbnails: getVideoThumbnails(catalogData),
+        title: catalogData.title,
+        totalPosts: catalogData.data.totalPosts,
+        totalVideos: catalogData.data.totalVideos,
+        updatedAt: catalogData.data.updatedAt,
+      };
 
-        if (hasMatchingVideos) {
-          const metaData = {
-            description: catalogData?.description,
-            id: catalogId,
-            isPublic: catalogData?.isPublic ?? true,
-            pageviews: catalogData.pageviews ?? 0,
-            thumbnails: getVideoThumbnails(catalogData),
-            title: catalogData?.title,
-            totalPosts: catalogData?.data.totalPosts,
-            totalVideos: catalogData?.data?.totalVideos,
-            updatedAt: catalogData?.data.updatedAt,
-          };
-
-          catalogListData.push(metaData);
-        }
-      }
-    })
-  );
+      catalogListData.push(metaData);
+    }
+  }
 
   return catalogListData;
 }
 
-const getCatalogMetadata = async (catalogId: string) => {
-  const catalogRef = refs.catalogs.doc(catalogId);
-  const catalogSnap = await catalogRef.get();
-  const catalogData = catalogSnap.data();
-  return catalogData;
-};
-
-const checkCatalogHasPublicVideos = (catalogData: ZCatalogDocument, isPublic: boolean) => {
-  // Since isPublic is now at document level, just check if the catalog's isPublic matches
-  return catalogData.isPublic === isPublic;
+const matchesVisibility = (catalogData: ZCatalogDocument, isPublic: boolean) => {
+  // Treat missing isPublic as public to match returned metadata default
+  const docIsPublic = catalogData.isPublic ?? true;
+  return docIsPublic === isPublic;
 };
 
 const getVideoThumbnails = (catalogData: ZCatalogDocument) => {

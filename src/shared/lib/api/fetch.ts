@@ -15,6 +15,11 @@ async function fetchApi<T = any>(endpoint: string, options?: RequestInit) {
   const response: Promise<ApiResponse<T>> = fetch(URL, options)
     .then((data) => data.json())
     .catch((err) => {
+      // Check if the error is due to abort
+      if (err.name === 'AbortError') {
+        Log.info("Fetch was aborted");
+        throw err; // Re-throw to let caller handle
+      }
       Log.fail(err);
       throw new Error(err?.message);
     });

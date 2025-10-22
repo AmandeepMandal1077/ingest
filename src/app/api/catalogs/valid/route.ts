@@ -6,7 +6,9 @@ import Log from "~/shared/utils/terminal-logger";
 export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
-    const isPublic = url.searchParams.get("isPublic") === "true";
+    const isPublicParam = url.searchParams.get("isPublic");
+    const isPublic =
+      isPublicParam === null ? undefined : isPublicParam === "true";
 
     const pageListData = await getValidCatalogIds(isPublic);
     return NxResponse.success(

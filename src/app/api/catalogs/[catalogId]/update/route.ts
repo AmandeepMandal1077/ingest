@@ -2,7 +2,7 @@ import type { NextRequest } from "next/server";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
-import { updateCatalogMeta, type CatalogUpdateResult } from "~/entities/catalogs";
+import { updateCatalogMeta, type CatalogUpdateResult, checkCatalogOwnership } from "~/entities/catalogs";
 import { CatalogMetaSchema } from "~/entities/catalogs/models";
 import { NxResponse } from "~/shared/lib/next/nx-response";
 
@@ -20,12 +20,32 @@ const CatalogUpdateSchema = CatalogMetaSchema.partial().extend({
 export async function PATCH(request: NextRequest, ctx: ContextParams) {
   const { catalogId } = ctx.params;
 
+  // Extract and validate userId from headers
+  const userId = request.headers.get("userId");
+  if (!userId) {
+    return NxResponse.fail(
+      "Authentication required. User ID not found.",
+      { code: "UNAUTHORIZED", details: "Missing userId header." },
+      401
+    );
+  }
+
   // Validate catalog ID parameter
   if (!catalogId || catalogId.trim() === '') {
     return NxResponse.fail(
       "Missing or invalid catalog ID in request path.",
       { code: "INVALID_PARAM", details: "catalogId parameter is required." },
       400
+    );
+  }
+
+  // Check catalog ownership before proceeding
+  const isOwner = await checkCatalogOwnership(userId, catalogId);
+  if (!isOwner) {
+    return NxResponse.fail(
+      "You do not have permission to update this catalog.",
+      { code: "FORBIDDEN", details: "User does not own this catalog." },
+      403
     );
   }
 

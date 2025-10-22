@@ -51,17 +51,25 @@ export default function ShareArchive({
     window.navigator.canShare(shareData)
   ) {
     return (
-      <span className="flex items-center gap-2 text-xs" onClick={shareLink}>
+      <button
+        type="button"
+        className="flex w-full items-center gap-2 text-xs text-left"
+        onClick={shareLink}
+      >
         <ShareIcon className="size-4" />
         Share archive
-      </span>
+      </button>
     );
   } else {
     return (
-      <span className="flex items-center gap-2 text-xs" onClick={copyLink}>
+      <button
+        type="button"
+        className="flex w-full items-center gap-2 text-xs text-left"
+        onClick={copyLink}
+      >
         <CopyIcon className="size-4" />
         Copy to Clipboard
-      </span>
+      </button>
     );
   }
 }

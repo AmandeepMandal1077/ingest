@@ -59,7 +59,7 @@ export default async function PublicArchive({
 
           <div className="mr-2">
             <DropdownMenu>
-              <DropdownMenuTrigger>
+              <DropdownMenuTrigger aria-label="Archive options menu">
                 <ThreeDotIcon className="size-5" />
               </DropdownMenuTrigger>
               <DropdownMenuContent
@@ -67,14 +67,14 @@ export default async function PublicArchive({
                 align="end"
                 className="border-none flex flex-col gap-2 w-44 rounded-lg"
               >
-                <DropdownMenuItem className="p-2 rounded-lg">
+                <DropdownMenuItem className="p-2 rounded-lg" asChild>
                   <DynamicShareArchive
                     archiveId={archiveId}
                     archiveTitle={archiveTitle}
                     archiveDescription={archiveDescription}
                   />
                 </DropdownMenuItem>
-                <DropdownMenuItem className="p-2 rounded-lg">
+                <DropdownMenuItem className="p-2 rounded-lg" asChild>
                   <TogglePublicPrivate
                     archiveId={archiveId}
                     initialIsPublic={archiveData?.isPublic ?? true}
