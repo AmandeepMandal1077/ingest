@@ -92,22 +92,22 @@ export async function PATCH(request: NextRequest, ctx: ContextParams) {
       path: issue.path.join('.'),
       message: issue.message
     }));
-    
+
     // Check if there are unknown fields (strict validation failed)
     const hasUnknownFields = parseResult.error.issues.some(
       issue => issue.code === 'unrecognized_keys'
     );
-    
+
     // Always return immediately on validation failure to prevent execution falling through
-    const errorMessage = hasUnknownFields 
-      ? "Unknown fields detected in payload. Only title, description, and isPublic are allowed." 
+    const errorMessage = hasUnknownFields
+      ? "Unknown fields detected in payload. Only title, description, and isPublic are allowed."
       : "Invalid payload format or values.";
-      
+
     return NxResponse.fail(
       errorMessage,
-      { 
-        code: "INVALID_PAYLOAD", 
-        details: JSON.stringify(errorDetails) 
+      {
+        code: "INVALID_PAYLOAD",
+        details: errorDetails
       },
       400
     );
@@ -120,7 +120,8 @@ export async function PATCH(request: NextRequest, ctx: ContextParams) {
   let result: CatalogUpdateResult;
   try {
     result = await updateCatalogMeta(catalogId, validatedPayload);
-  } catch (_error) {
+  } catch (error) {
+    console.error("Unexpected error updating catalog:", error);
     return NxResponse.fail(
       "An unexpected error occurred while updating the catalog.",
       { code: "UPDATE_FAILED", details: null },
