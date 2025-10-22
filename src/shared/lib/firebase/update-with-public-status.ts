@@ -9,6 +9,7 @@ export interface UpdateWithPublicStatusResult {
   success: boolean;
   message: string;
   statusCode?: number;
+  retryAfter?: number; // Retry time in seconds for rate limit errors
 }
 
 export interface UpdateWithPublicStatusOptions {
@@ -85,7 +86,8 @@ export async function updateWithPublicStatus(
           return {
             success: false,
             message: rateLimitResult.message,
-            statusCode: 429
+            statusCode: 429,
+            retryAfter: rateLimitResult.remainingTime
           };
         }
 

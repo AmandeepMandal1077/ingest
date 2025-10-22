@@ -54,34 +54,47 @@ export function TogglePublicPrivate({
         body: JSON.stringify({ isPublic: newIsPublic }),
       });
 
-      const data = await response.json();
+      let parsedData: Record<string, any> = {};
+      try {
+        parsedData = await response.json();
+      } catch {
+        // Fallback to empty object if parsing fails
+      }
 
-      if (data.success) {
+      if (response.ok) {
         setIsPublic(newIsPublic);
         setRateLimitRemaining(null);
         toast.success(
           `Archive is now ${newIsPublic ? "public" : "private"}`
         );
-        
+
         // Trigger UI transition synchronously after network request completes
         startTransition(() => {
           router.refresh();
         });
       } else {
-        // Check if it's a rate limit error
-        if (data.error?.code === "RATE_LIMIT_EXCEEDED") {
-          // Extract remaining time from message if available
-          const message = data.message || "";
-          const match = message.match(/(\d+)\s+seconds/);
-          if (match) {
-            const seconds = Number.parseInt(match[1], 10);
+        if (response.status === 429) {
+          // Handle rate limit
+          let retryAfter = response.headers.get("Retry-After");
+          if (retryAfter) {
+            const seconds = parseInt(retryAfter, 10);
             setRateLimitRemaining(seconds);
             toast.error(`Rate limit exceeded. Try again in ${seconds} seconds.`);
           } else {
-            toast.error(message || "Rate limit exceeded. Please try again later.");
+            // Fallback to parsing seconds from body
+            const message = parsedData.message || "";
+            const match = message.match(/(\d+)\s+seconds/);
+            if (match) {
+              const seconds = parseInt(match[1], 10);
+              setRateLimitRemaining(seconds);
+              toast.error(`Rate limit exceeded. Try again in ${seconds} seconds.`);
+            } else {
+              setRateLimitRemaining(60); // Default to 60 seconds if no info
+              toast.error("Rate limit exceeded. Please try again later.");
+            }
           }
         } else {
-          toast.error(data.message || "Failed to update archive visibility");
+          toast.error(parsedData.message || "Failed to update archive visibility");
         }
       }
     } catch (error) {

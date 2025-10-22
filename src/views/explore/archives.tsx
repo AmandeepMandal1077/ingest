@@ -1,9 +1,11 @@
 "use client";
 
-import type { ZArchiveValid } from "~/entities/archives/models";
 import { useEffect, useState } from "react";
 
+import type { ZArchiveValid } from "~/entities/archives/models";
+
 import fetchApi from "~/shared/lib/api/fetch";
+import { ToggleGroup, ToggleGroupItem } from "~/shared/ui/toggle-group";
 
 import BackLink from "~/widgets/back-link";
 import DetailsCard from "~/widgets/details-card";
@@ -13,13 +15,13 @@ import {
   PublicHeaderTitle,
   PublicMainContainer,
 } from "~/widgets/public-layout";
-import { ToggleGroup, ToggleGroupItem } from "~/shared/ui/toggle-group";
 
 export default function Archives() {
   const [isPublic, setIsPublic] = useState(true);
   const [archives, setArchives] = useState<ZArchiveValid[]>([]);
 
-  const handleToggle = (value: string) => {
+  const handleToggle = (value: string | null) => {
+    if (!value) return;
     setIsPublic(value === "public");
   };
 
@@ -28,16 +30,20 @@ export default function Archives() {
 
     const fetchArchives = async () => {
       try {
-        const response = await fetchApi<ZArchiveValid[]>(`/archives/valid?isPublic=${isPublic}`, {
-          signal: controller.signal,
-        });
+        const response = await fetchApi<ZArchiveValid[]>(
+          `/archives/valid?isPublic=${isPublic}`,
+          {
+            signal: controller.signal,
+          }
+        );
         if (response.data) {
           setArchives(response.data);
+        } else {
+          setArchives([]);
         }
       } catch (error) {
-        if (error instanceof Error && error.name !== 'AbortError') {
-          // Handle other errors if needed
-          console.error('Fetch error:', error);
+        if (!(error instanceof Error && error.name === "AbortError" || error instanceof DOMException)) {
+          console.error("Fetch error:", error);
         }
       }
     };
@@ -65,13 +71,21 @@ export default function Archives() {
           >
             <ToggleGroupItem
               value="public"
-              style={isPublic ? { backgroundColor: 'rgb(215, 38, 77)', color: 'white' } : {}}
+              style={
+                isPublic
+                  ? { backgroundColor: "rgb(215, 38, 77)", color: "white" }
+                  : {}
+              }
             >
               Public
             </ToggleGroupItem>
             <ToggleGroupItem
               value="private"
-              style={!isPublic ? { backgroundColor: 'rgb(215, 38, 77)', color: 'white' } : {}}
+              style={
+                !isPublic
+                  ? { backgroundColor: "rgb(215, 38, 77)", color: "white" }
+                  : {}
+              }
             >
               Private
             </ToggleGroupItem>

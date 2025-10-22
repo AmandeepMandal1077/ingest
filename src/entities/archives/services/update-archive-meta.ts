@@ -16,6 +16,7 @@ export interface ArchiveUpdateResult {
   success: boolean;
   message: string;
   statusCode?: number;
+  retryAfter?: number; // Retry time in seconds for rate limit errors
 }
 
 export interface ArchiveUpdateOptions {

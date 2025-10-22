@@ -1,10 +1,13 @@
 import type { NextRequest } from "next/server";
 import { revalidatePath } from "next/cache";
+import { cookies } from "next/headers";
 import { z } from "zod";
 
 import { updateCatalogMeta, type CatalogUpdateResult, checkCatalogOwnership } from "~/entities/catalogs";
 import { CatalogMetaSchema } from "~/entities/catalogs/models";
 import { NxResponse } from "~/shared/lib/next/nx-response";
+import { SESSION_COOKIE_NAME } from "~/shared/lib/constants";
+import { verifyFirebaseSessionCookie } from "~/shared/lib/firebase/verify-session-cookie";
 
 type ContextParams = {
   params: {
@@ -20,12 +23,31 @@ const CatalogUpdateSchema = CatalogMetaSchema.partial().extend({
 export async function PATCH(request: NextRequest, ctx: ContextParams) {
   const { catalogId } = ctx.params;
 
-  // Extract and validate userId from headers
-  const userId = request.headers.get("userId");
-  if (!userId) {
+  // Verify authentication using server-side session cookie
+  const authSessionToken = cookies().get(SESSION_COOKIE_NAME)?.value;
+  if (!authSessionToken) {
     return NxResponse.fail(
-      "Authentication required. User ID not found.",
-      { code: "UNAUTHORIZED", details: "Missing userId header." },
+      "Authentication required. No session found.",
+      { code: "UNAUTHORIZED", details: "No authentication session found." },
+      401
+    );
+  }
+
+  let verifiedUserId: string;
+  try {
+    const decodedUserDetails = await verifyFirebaseSessionCookie(authSessionToken);
+    if (!decodedUserDetails.sub) {
+      return NxResponse.fail(
+        "Unable to verify credentials.",
+        { code: "VERIFICATION_FAILED", details: "Invalid user ID in session." },
+        401
+      );
+    }
+    verifiedUserId = decodedUserDetails.sub;
+  } catch (err) {
+    return NxResponse.fail(
+      "Unable to verify credentials.",
+      { code: "VERIFICATION_FAILED", details: "Unable to verify authentication session." },
       401
     );
   }
@@ -40,7 +62,7 @@ export async function PATCH(request: NextRequest, ctx: ContextParams) {
   }
 
   // Check catalog ownership before proceeding
-  const isOwner = await checkCatalogOwnership(userId, catalogId);
+  const isOwner = await checkCatalogOwnership(verifiedUserId, catalogId);
   if (!isOwner) {
     return NxResponse.fail(
       "You do not have permission to update this catalog.",

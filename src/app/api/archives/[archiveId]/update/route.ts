@@ -1,11 +1,15 @@
 import type { NextRequest } from "next/server";
+import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
+import { cookies } from "next/headers";
 import { z } from "zod";
 
 import { updateArchiveMeta, type ArchiveUpdateResult, checkArchiveOwnership } from "~/entities/archives";
 import { ArchiveMetaSchema } from "~/entities/archives/models";
 
 import { NxResponse } from "~/shared/lib/next/nx-response";
+import { SESSION_COOKIE_NAME } from "~/shared/lib/constants";
+import { verifyFirebaseSessionCookie } from "~/shared/lib/firebase/verify-session-cookie";
 
 type ContextParams = {
   params: {
@@ -21,12 +25,31 @@ const ArchiveUpdateSchema = ArchiveMetaSchema.partial().extend({
 export async function PATCH(request: NextRequest, ctx: ContextParams) {
   const { archiveId } = ctx.params;
 
-  // Extract and validate userId from headers
-  const userId = request.headers.get("userId");
-  if (!userId) {
+  // Verify authentication using server-side session cookie
+  const authSessionToken = cookies().get(SESSION_COOKIE_NAME)?.value;
+  if (!authSessionToken) {
     return NxResponse.fail(
-      "Authentication required. User ID not found.",
-      { code: "UNAUTHORIZED", details: "Missing userId header." },
+      "Authentication required. No session found.",
+      { code: "UNAUTHORIZED", details: "No authentication session found." },
+      401
+    );
+  }
+
+  let verifiedUserId: string;
+  try {
+    const decodedUserDetails = await verifyFirebaseSessionCookie(authSessionToken);
+    if (!decodedUserDetails.sub) {
+      return NxResponse.fail(
+        "Unable to verify credentials.",
+        { code: "VERIFICATION_FAILED", details: "Invalid user ID in session." },
+        401
+      );
+    }
+    verifiedUserId = decodedUserDetails.sub;
+  } catch (err) {
+    return NxResponse.fail(
+      "Unable to verify credentials.",
+      { code: "VERIFICATION_FAILED", details: "Unable to verify authentication session." },
       401
     );
   }
@@ -41,7 +64,7 @@ export async function PATCH(request: NextRequest, ctx: ContextParams) {
   }
 
   // Check archive ownership before proceeding
-  const isOwner = await checkArchiveOwnership(userId, archiveId);
+  const isOwner = await checkArchiveOwnership(verifiedUserId, archiveId);
   if (!isOwner) {
     return NxResponse.fail(
       "You do not have permission to update this archive.",
@@ -92,6 +115,15 @@ export async function PATCH(request: NextRequest, ctx: ContextParams) {
   // Extract only the validated and sanitized fields
   const validatedPayload = parseResult.data;
 
+  // Check for no-op PATCH: prevent empty payloads from reaching the service
+  if (Object.keys(validatedPayload).length === 0) {
+    return NxResponse.fail(
+      "No valid fields provided for update. Please provide at least one field (title, description, or isPublic).",
+      { code: "EMPTY_PAYLOAD", details: "No updatable fields found in request body." },
+      400
+    );
+  }
+
   // Execute update with proper error handling
   let result: ArchiveUpdateResult;
   try {
@@ -109,6 +141,30 @@ export async function PATCH(request: NextRequest, ctx: ContextParams) {
     const errorCode = statusCode === 429 ? "RATE_LIMIT_EXCEEDED" : 
                      statusCode === 404 ? "NOT_FOUND" : 
                      statusCode === 400? "INVALID_PAYLOAD" : "UPDATE_FAILED";
+    
+    // Handle 429 status code specially to include Retry-After header
+    if (statusCode === 429) {
+      const retryAfter = result.retryAfter || 120; // Default to 120 seconds if not provided
+      const response = NextResponse.json(
+        {
+          success: false,
+          message: result.message,
+          data: null,
+          error: { code: errorCode, details: null },
+          meta: {
+            statusCode,
+            timestamp: new Date().toISOString(),
+          },
+        },
+        { 
+          status: statusCode,
+          headers: {
+            "Retry-After": retryAfter.toString()
+          }
+        }
+      );
+      return response;
+    }
     
     return NxResponse.fail(
       result.message,
